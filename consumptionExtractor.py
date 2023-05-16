@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import glob
 import shutil
 import datetime
@@ -28,7 +29,6 @@ def printColor(color, string):
 
 
 # path_of_factory_records = '../../../李/Factory Records/'
-path_of_production_schedule = '../../../Prodution Schedule/'
 path_of_consumption_reports = './consumption reports'
 path_of_factory_records = './'
 hexiao_file = './auto核销.xlsx'
@@ -154,8 +154,12 @@ def process_consumption(consumption_report, add = False, pull = False):
     for i in range(0, len(consumption)):
         if consumption[i]["material_number"] == "A36-COHO":
             consumption[i]["material_number"] = "A36"
+        if consumption[i]["material_number"] == "A36-KETA":
+            consumption[i]["material_number"] = "A36"
         if consumption[i]["material_number"] == "B35":
             consumption[i]["material_number"] = "B22"
+
+    consumption = unifyMaterialNumbers(consumption)
 
     if pull:
         pulled_materials = get_pulled_materials(consumption_report)
@@ -277,13 +281,14 @@ def get_report_date(consumption_report, sheet):
 
 
 def get_inventory_file(path):
-    """Search for all files under `path` that start with "INVENTORY 202", and return the file with the latest modification date."""
-    inventory_files = glob.glob(os.path.join(path, "INVENTORY 202*.xlsx"))
-    latest_file = None
-    for file in inventory_files:
-        if not latest_file or os.path.getmtime(file) > os.path.getmtime(latest_file):
-            latest_file = file
-    return latest_file
+    return './INVENTORY TEMP.xlsx'
+    """Search for all files under `path` that start with "INVENTORY", and return the file with the latest modification date."""
+    # inventory_files = glob.glob(os.path.join(path, "INVENTORY*.xlsx"))
+    # latest_file = None
+    # for file in inventory_files:
+    #     if not latest_file or os.path.getmtime(file) > os.path.getmtime(latest_file):
+    #         latest_file = file
+    # return latest_file
 
 
 def backup_file(inventory_file):
@@ -314,7 +319,7 @@ def get_consumed_materials(file_path):
     consumed_materials = []
     
     # Loop through each row starting from row 9
-    for i, row in enumerate(worksheet.iter_rows(min_row=9)):
+    for i, row in tqdm(enumerate(worksheet.iter_rows(min_row=9))):
         # Check if the value in column B starts with A, B, C, D, or E
         if row[1].value and re.match(r'W\d', row[1].value):
             break
@@ -333,6 +338,24 @@ def get_consumed_materials(file_path):
     
     # Return the list of consumed materials
     return consumed_materials
+
+
+def unifyMaterialNumbers(consumption):
+    combined = {}
+
+    # Combine elements with the same 'material_number' by adding their 'consumed' values
+    for element in consumption:
+        material_number = element['material_number']
+        consumed = element['consumed']
+        if material_number in combined:
+            combined[material_number] += consumed
+        else:
+            combined[material_number] = consumed
+
+    # Create a new list of dictionaries with the combined results
+    output = [{'material_number': material_number, 'consumed': consumed} for material_number, consumed in combined.items()]
+
+    return output
 
 
 def find_total(worksheet, row_num):
@@ -354,7 +377,7 @@ def get_scraped_materials(scrap_report):
     wb = openpyxl.load_workbook(scrap_report)
     ws = wb["ConsumptionReport"]
     scraped = []
-    for row in ws.iter_rows(min_row=7):
+    for row in tqdm(ws.iter_rows(min_row=7)):
         if row[1].value is not None:
             material_number = row[1].value.split()[0]
             scraped_quantity = row[4].value
@@ -374,7 +397,9 @@ def get_pulled_materials(consumption_report):
     material_rows = []
     while True:
         cell_value = ws.cell(row=current_row, column=2).value
-        # print(cell_value)
+        print(cell_value)
+        sys.stdout.write("\033[F")
+        sys.stdout.write("\033[K")
         if cell_value != None and not valid_row(cell_value) and not cell_value.startswith('WO # '):
             break
         elif cell_value != None and valid_row(cell_value):
@@ -405,17 +430,6 @@ def valid_row(cell_value):
     # or cell_value.startswith('C') or cell_value.startswith('D') or cell_value.startswith('E')
 
 
-def find_item_num(file ,lot_num):
-    wb = openpyxl.load_workbook(file)
-    sheet = wb['2023年生产计划']
-
-    for row in sheet.iter_rows(min_row=5, values_only=True):
-        if row[1] and lot_num in row[1]:
-            return {'lot_num': row[1], 'item_num': row[5]}
-
-    return None
-
-
 def find_pulled_materials(ws, row_number):
     pulled_material = ws.cell(row=row_number, column=2).value.split()[0]
     pulled_materials = []
@@ -433,6 +447,7 @@ def find_pulled_materials(ws, row_number):
             lot_num = re.search(pattern, lot_num).group(1)
             qty = ws.cell(row=current_row, column=7).value
             pulled_materials.append({'lot-num': lot_num, 'material': pulled_material, 'qty': float(qty.replace(',', ''))})
+            printColor('purple', f"{lot_num}: {pulled_material} - {float(qty.replace(',', ''))}")
         elif valid_row(current_cell) or current_cell.startswith('C') or last_row_with_date(current_cell):
             break
         
@@ -457,7 +472,7 @@ def add_pulled_materials(pulled_materials, file, date):
     ws = wb.create_sheet(title=formatted_date)
 
     for i, material in enumerate(pulled_material_list):
-        printColor('purple', f"{material['lot-num']}: {material['material']} - {material['qty']}")
+        # printColor('purple', f"{material['lot-num']}: {material['material']} - {material['qty']}")
         row = 1 + i
         # if i == 0 or material['lot-num'] != pulled_material_list[i-1]['lot-num']:
         #     ws.cell(row=row, column=1, value=material['lot-num'])
@@ -563,19 +578,23 @@ def add_consumption(inventory_file, sheet_name, consumpt_date, consumption):
         current_row = None
         for row in ws.iter_rows(min_row=2, max_col=col_to_search + 2):
             # print(row[col_to_search].value, ' - ', item["material_number"])
-            if row[col_to_search].value == item["material_number"]:
-                if row[col_to_search].value.startswith('A'):
+            excel_material_num = str(row[col_to_search].value).strip()
+            if excel_material_num == item["material_number"]:
+                if excel_material_num.startswith('A'):
                     color = 'green'
-                elif row[col_to_search].value.startswith('B'):
+                elif excel_material_num.startswith('B'):
                     color = 'yellow'
-                elif row[col_to_search].value.startswith('C') or row[col_to_search].value.startswith('D'):
+                elif excel_material_num.startswith('C') or excel_material_num.startswith('D'):
                     color = 'blue'
-                printColor(color, f'{row[col_to_search].value} - {item["consumed"]}')
+                printColor(color, f'{excel_material_num} - {item["consumed"]}')
                 current_row = row[col_to_search].row
                 break
         
         if current_row:
             ws.cell(row=current_row, column=current_column).value = item["consumed"]
+        
+        else:
+            printColor('red', f'*** Unable to find {item["material_number"]} in excel file ***')
 
     # Save the file
     # wb.security = WorkbookProtection(workbookPassword = '2400LI')
