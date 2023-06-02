@@ -5,7 +5,7 @@ import glob
 import shutil
 import datetime
 import openpyxl
-from openpyxl.styles import PatternFill
+# from openpyxl.styles import PatternFill
 from openpyxl.workbook.protection import WorkbookProtection
 from tqdm import tqdm
 import colorama
@@ -32,7 +32,7 @@ def printColor(color, string):
 path_of_consumption_reports = './consumption reports'
 path_of_factory_records = './'
 hexiao_file = './auto核销.xlsx'
-password = '2400LI'
+# password = '2400LI'
 
 
 def main():
@@ -158,8 +158,10 @@ def process_consumption(consumption_report, add = False, pull = False):
             consumption[i]["material_number"] = "A36"
         if consumption[i]["material_number"] == "B35":
             consumption[i]["material_number"] = "B22"
+        if consumption[i]["material_number"] == "B19-F":
+            consumption[i]["material_number"] = "B19"
 
-    consumption = unifyMaterialNumbers(consumption)
+    consumption = unifyMaterialNumbers(consumption, 'c')
 
     if pull:
         pulled_materials = get_pulled_materials(consumption_report)
@@ -182,89 +184,106 @@ def process_consumption(consumption_report, add = False, pull = False):
 
 def process_scarp(scrap_report):
     print(scrap_report)
+    scrap_date = get_report_date(scrap_report, "ConsumptionReport")
     
     inventory_file = get_inventory_file(path_of_factory_records)
     # print(inventory_file)
 
     scraps = get_scraped_materials(scrap_report)
+    
+    scraps = [material for material in scraps if material.get("material_number") != "B00"]
+    for i in range(0, len(scraps)):
+        if scraps[i]["material_number"] == "A36-COHO":
+            scraps[i]["material_number"] = "A36"
+        if scraps[i]["material_number"] == "A36-KETA":
+            scraps[i]["material_number"] = "A36"
+        if scraps[i]["material_number"] == "B35":
+            scraps[i]["material_number"] = "B22"
+        if scraps[i]["material_number"] == "B19-F":
+            scraps[i]["material_number"] = "B19"
+    
+    scraps = unifyMaterialNumbers(scraps, 's')
 
     raw = [d for d in scraps if d['material_number'].startswith('A')]
-    add_scrap(inventory_file, "RAW OUT", raw)
+    add_scrap(inventory_file, "RAW SCRAP", scrap_date, raw)
 
     ingredient = [d for d in scraps if d['material_number'].startswith('B')]
-    add_scrap(inventory_file, "INGREDIENT OUT", ingredient)
+    add_scrap(inventory_file, "INGREDIENT SCRAP", scrap_date, ingredient)
 
     bag = [d for d in scraps if d['material_number'].startswith('C')]
-    add_scrap(inventory_file, "BAG OUT", bag)
+    add_scrap(inventory_file, "BAG SCRAP", scrap_date, bag)
 
     box = [d for d in scraps if d['material_number'].startswith('D') or d['material_number'].startswith('E')]
-    add_scrap(inventory_file, "BOX OUT", box)
+    add_scrap(inventory_file, "BOX SCRAP", scrap_date, box)
 
 
-def get_latest_consumption_report():
-    # Set the path to the directory containing the consumption reports
-    path = "./consumption reports"
+# def get_latest_consumption_report():
+#     # Set the path to the directory containing the consumption reports
+#     path = "./consumption reports"
     
-    # Get a list of all xlsx files in the subdirectory
-    xlsx_files = glob.glob(os.path.join(path, "*.xlsx"))
+#     # Get a list of all xlsx files in the subdirectory
+#     xlsx_files = glob.glob(os.path.join(path, "*.xlsx"))
     
-    # Initialize variables to keep track of the latest date and file
-    latest_date = None
-    latest_file = None
+#     # Initialize variables to keep track of the latest date and file
+#     latest_date = None
+#     latest_file = None
     
-    # Loop through each xlsx file
-    for file_path in xlsx_files:
-        # Get just the filename without the path
-        file_name = os.path.basename(file_path)
+#     # Loop through each xlsx file
+#     for file_path in xlsx_files:
+#         # Get just the filename without the path
+#         file_name = os.path.basename(file_path)
         
-        # Check if the filename starts with "Consumption Report"
-        if file_name.startswith("Consumption Report"):
-            # Get the date from the filename
-            date_str = file_name[len("Consumption Report")+1:len("Consumption Report")+17]
+#         # Check if the filename starts with "Consumption Report"
+#         if file_name.startswith("Consumption Report"):
+#             # Get the date from the filename
+#             date_str = file_name[len("Consumption Report")+1:len("Consumption Report")+17]
             
-            # Convert the date string to a datetime object
-            date = datetime.datetime.strptime(date_str, "%Y-%m-%d %H-%M")
+#             # Convert the date string to a datetime object
+#             date = datetime.datetime.strptime(date_str, "%Y-%m-%d %H-%M")
             
-            # Check if this file's date is later than the latest date we've seen so far
-            if latest_date is None or date > latest_date:
-                latest_date = date
-                latest_file = file_path
+#             # Check if this file's date is later than the latest date we've seen so far
+#             if latest_date is None or date > latest_date:
+#                 latest_date = date
+#                 latest_file = file_path
     
-    # Return the filename and path of the latest file
-    return latest_file
+#     # Return the filename and path of the latest file
+#     return latest_file
 
 
-def get_latest_scrap_report():
-    """Find the latest Scrap Report file in the 'consumption reports' directory."""
-    folder_path = "./consumption reports"
-    # Get a list of all files in the folder that start with "Scrap Report"
-    files = [f for f in os.listdir(folder_path) if f.startswith("Scrap Report")]
-    # If there are no matching files, return None
-    if not files:
-        return None
-    # Find the file with the latest date in the filename
-    latest_file = None
-    latest_date = None
-    for file in files:
-        try:
-            # Extract the date from the filename and convert it to a datetime object
-            date_str = file[13:23]
-            date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+# def get_latest_scrap_report():
+#     """Find the latest Scrap Report file in the 'consumption reports' directory."""
+#     folder_path = "./consumption reports"
+#     # Get a list of all files in the folder that start with "Scrap Report"
+#     files = [f for f in os.listdir(folder_path) if f.startswith("Scrap Report")]
+#     # If there are no matching files, return None
+#     if not files:
+#         return None
+#     # Find the file with the latest date in the filename
+#     latest_file = None
+#     latest_date = None
+#     for file in files:
+#         try:
+#             # Extract the date from the filename and convert it to a datetime object
+#             date_str = file[13:23]
+#             date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
 
-            # If this is the first file or the date is later than the previous latest date, update the latest file and date
-            if not latest_date or date > latest_date:
-                latest_file = file
-                latest_date = date
-        except:
-            # If there's an error in extracting the date, skip this file
-            continue
-    # Return the full path of the latest file
-    return os.path.join(folder_path, latest_file)
+#             # If this is the first file or the date is later than the previous latest date, update the latest file and date
+#             if not latest_date or date > latest_date:
+#                 latest_file = file
+#                 latest_date = date
+#         except:
+#             # If there's an error in extracting the date, skip this file
+#             continue
+#     # Return the full path of the latest file
+#     return os.path.join(folder_path, latest_file)
 
 
 def get_report_date(consumption_report, sheet):
     # Open the given consumption report file
-    wb = openpyxl.load_workbook(consumption_report)
+    try:
+        wb = openpyxl.load_workbook(consumption_report)
+    except:
+        printColor('red', f'*** Cannot open {consumption_report}, please check if its current opened ***')
 
     # Get the WOConsumption worksheet
     ws = wb[sheet]
@@ -291,28 +310,31 @@ def get_inventory_file(path):
     # return latest_file
 
 
-def backup_file(inventory_file):
-    """Create a backup folder with today's date, and copy the inventory file to it with the date as the filename."""
-    # Get today's date in YYYY-MM-DD format
-    backup_folder = datetime.date.today().strftime("%Y-%m-%d")
-    # Create the backup folder if it doesn't already exist
-    backup_path = os.path.join("backups", backup_folder)
-    if not os.path.exists(backup_path):
-        os.makedirs(backup_path)
-    # Construct the filename for the backup file
-    filename = os.path.basename(inventory_file)
-    backup_file = os.path.join(backup_path, filename)
-    # Copy the inventory file to the backup folder
-    try:
-        shutil.copy(inventory_file, backup_file)
-        return True
-    except:
-        return False
+# def backup_file(inventory_file):
+#     """Create a backup folder with today's date, and copy the inventory file to it with the date as the filename."""
+#     # Get today's date in YYYY-MM-DD format
+#     backup_folder = datetime.date.today().strftime("%Y-%m-%d")
+#     # Create the backup folder if it doesn't already exist
+#     backup_path = os.path.join("backups", backup_folder)
+#     if not os.path.exists(backup_path):
+#         os.makedirs(backup_path)
+#     # Construct the filename for the backup file
+#     filename = os.path.basename(inventory_file)
+#     backup_file = os.path.join(backup_path, filename)
+#     # Copy the inventory file to the backup folder
+#     try:
+#         shutil.copy(inventory_file, backup_file)
+#         return True
+#     except:
+#         return False
 
 
 def get_consumed_materials(file_path):
     # Open the workbook and select the first worksheet
-    workbook = openpyxl.load_workbook(file_path)
+    try:
+        workbook = openpyxl.load_workbook(file_path)
+    except:
+        printColor('red', f'*** Cannot open {file_path}, please check if its current opened ***')
     worksheet = workbook.worksheets[0]
     
     # Declare an empty list to hold the consumed materials
@@ -340,20 +362,25 @@ def get_consumed_materials(file_path):
     return consumed_materials
 
 
-def unifyMaterialNumbers(consumption):
+def unifyMaterialNumbers(consumption, cat):
     combined = {}
+    
+    if cat == 'c':
+        qty_key = 'consumed'
+    elif cat == 's':
+        qty_key = 'scraped'
 
     # Combine elements with the same 'material_number' by adding their 'consumed' values
     for element in consumption:
         material_number = element['material_number']
-        consumed = element['consumed']
+        qty = element[qty_key]
         if material_number in combined:
-            combined[material_number] += consumed
+            combined[material_number] += qty
         else:
-            combined[material_number] = consumed
+            combined[material_number] = qty
 
     # Create a new list of dictionaries with the combined results
-    output = [{'material_number': material_number, 'consumed': consumed} for material_number, consumed in combined.items()]
+    output = [{'material_number': material_number, qty_key: qty} for material_number, qty in combined.items()]
 
     return output
 
@@ -374,7 +401,11 @@ def find_total(worksheet, row_num):
 
 
 def get_scraped_materials(scrap_report):
-    wb = openpyxl.load_workbook(scrap_report)
+    try:
+        wb = openpyxl.load_workbook(scrap_report)
+    except:
+        printColor('red', f'*** Cannot open {scrap_report}, please check if its current opened ***')
+
     ws = wb["ConsumptionReport"]
     scraped = []
     for row in tqdm(ws.iter_rows(min_row=7)):
@@ -387,7 +418,10 @@ def get_scraped_materials(scrap_report):
 
 def get_pulled_materials(consumption_report):
     # Load the workbook
-    wb = openpyxl.load_workbook(consumption_report, read_only=True)
+    try:
+        wb = openpyxl.load_workbook(consumption_report, read_only=True)
+    except:
+        printColor('red', f'*** Cannot open {consumption_report}, please check if its current opened ***')
 
     # Select the WOConsumption worksheet
     ws = wb.worksheets[0]
@@ -467,7 +501,12 @@ def last_row_with_date(current_cell):
 def add_pulled_materials(pulled_materials, file, date):
     if len(pulled_materials) == 0: return
     pulled_material_list = [item for item in pulled_materials if item['material'].startswith('A')] + [item for item in pulled_materials if item['material'].startswith('B')]
-    wb = openpyxl.load_workbook(file)
+    
+    try:
+        wb = openpyxl.load_workbook(file)
+    except:
+        printColor('red', f'*** Cannot open {file}, please check if its current opened ***')
+        
     formatted_date = date.replace('/', '-')
     ws = wb.create_sheet(title=formatted_date)
 
@@ -482,7 +521,11 @@ def add_pulled_materials(pulled_materials, file, date):
         ws.cell(row=row, column=3, value=material['material'])
         ws.cell(row=row, column=4, value=material['qty'])
 
-    wb.save(file)
+    try:
+        wb.save(file)
+        wb.close()
+    except:
+        printColor('red', f'***Cannot save {file}, please check if the excel file is currently opened***')
 
 
 # def add_pulled_materials_to_all(pulled_materials, file):
@@ -503,50 +546,93 @@ def add_pulled_materials(pulled_materials, file, date):
 #     wb.save(file)
 
 
-def add_scrap(inventory_file, sheet_name, scraps):
+def add_scrap(inventory_file, sheet_name, scrap_date, scraps):
     if len(scraps) == 0: return
-    col_to_search = 1
+    col_to_search = 0
     # Open the xlsx file and worksheet
-    wb = openpyxl.load_workbook(inventory_file)
+    try:
+        wb = openpyxl.load_workbook(inventory_file, read_only=False)
+    except:
+        printColor('red', f'*** Cannot open {inventory_file}, please check if its current opened ***')
     ws = wb[sheet_name]
     
-    # Search for the column number with value 'scrap' in row 1
-    col_num = None
-    for col in range(1, ws.max_column + 1):
-        # print(ws.cell(row=1, column=col).value)
-        if ws.cell(row=1, column=col).value == 'scrap':
-            col_num = col
+    # # Search for the column number with value 'scrap' in row 1
+    # col_num = None
+    # for col in range(1, ws.max_column + 1):
+    #     # print(ws.cell(row=1, column=col).value)
+    #     if ws.cell(row=1, column=col).value == 'scrap':
+    #         col_num = col
+    #         break
+    
+    # if col_num is None:
+    #     printColor('red', "Column with value 'scrap' not found in row 1.")
+    #     return
+    
+    # # Loop through each scrap in the scraps list
+    # for scrap in scraps:
+    #     # Search for the row number with value same as scrap["material_number"] in col_to_search
+    #     row_num = None
+    #     for row in range(2, ws.max_row + 1):
+    #         if ws.cell(row=row, column=col_to_search).value == scrap["material_number"]:
+    #             row_num = row
+    #             break
+        
+    #     if row_num is None:
+    #         print(f"No row found with material number '{scrap['material_number']}' in column {col_to_search}.")
+    #         continue
+
+    #     printColor('purple', f"{scrap['material_number']} - {scrap['scraped']}")
+        
+    #     # Check if the cell is empty, and set its value accordingly
+    #     cell_value = ws.cell(row=row_num, column=col_num).value
+    #     scrap_qty = float(scrap['scraped'].replace(',', ''))
+    #     if cell_value is None:
+    #         ws.cell(row=row_num, column=col_num).value = f"= {scrap_qty}"
+    #     else:
+    #         ws.cell(row=row_num, column=col_num).value = f"{cell_value} + {scrap_qty}"
+    
+    # # Save changes to the inventory file
+    
+    scrap_date = datetime.datetime.strptime(scrap_date, "%m/%d/%Y")
+    day_value = int(scrap_date.day)
+    
+    # Find column number for day_value
+    current_column = None
+    for col in ws.iter_cols(min_row=1, max_row=1, min_col=1):
+        if col[0].value == day_value:
+            current_column = col[0].column
             break
     
-    if col_num is None:
-        printColor('red', "Column with value 'scrap' not found in row 1.")
-        return
-    
-    # Loop through each scrap in the scraps list
-    for scrap in scraps:
-        # Search for the row number with value same as scrap["material_number"] in col_to_search
-        row_num = None
-        for row in range(2, ws.max_row + 1):
-            if ws.cell(row=row, column=col_to_search).value == scrap["material_number"]:
-                row_num = row
+    for item in scraps:
+        # Find row number for material_number
+        current_row = None
+        for row in ws.iter_rows(min_row=2, max_col=col_to_search + 2):
+            # print(row[col_to_search].value, ' - ', item["material_number"])
+            excel_material_num = str(row[col_to_search].value).strip()
+            if excel_material_num == item["material_number"]:
+                if excel_material_num.startswith('A'):
+                    color = 'green'
+                elif excel_material_num.startswith('B'):
+                    color = 'yellow'
+                elif excel_material_num.startswith('C') or excel_material_num.startswith('D') or excel_material_num.startswith('E'):
+                    color = 'blue'
+                printColor(color, f'{excel_material_num} - {item["scraped"]}')
+                current_row = row[col_to_search].row
                 break
         
-        if row_num is None:
-            print(f"No row found with material number '{scrap['material_number']}' in column {col_to_search}.")
-            continue
-
-        printColor('purple', f"{scrap['material_number']} - {scrap['scraped']}")
+        if current_row:
+            ws.cell(row=current_row, column=current_column).value = int(item["scraped"])
         
-        # Check if the cell is empty, and set its value accordingly
-        cell_value = ws.cell(row=row_num, column=col_num).value
-        scrap_qty = float(scrap['scraped'].replace(',', ''))
-        if cell_value is None:
-            ws.cell(row=row_num, column=col_num).value = f"= {scrap_qty}"
         else:
-            ws.cell(row=row_num, column=col_num).value = f"{cell_value} + {scrap_qty}"
-    
-    # Save changes to the inventory file
+            printColor('red', f'*** Unable to find {item["material_number"]} in excel file ***')
+
     wb.save(inventory_file)
+    # try:
+    #     wb.save(inventory_file)
+    
+    # except:
+    #     printColor('red', f'***Cannot save {inventory_file}, please check if the excel file is currently open***')
+    
     wb.close()
 
 
@@ -555,8 +641,11 @@ def add_consumption(inventory_file, sheet_name, consumpt_date, consumption):
     if len(consumption) == 0: return
     col_to_search = 0
     # Open inventory file with password
-    wb = openpyxl.load_workbook(inventory_file, read_only=False)
-    wb.security = WorkbookProtection(workbookPassword=password)
+    try:
+        wb = openpyxl.load_workbook(inventory_file, read_only=False)
+    except:
+        printColor('red', f'*** Cannot open {inventory_file}, please check if its current opened ***')
+    # wb.security = WorkbookProtection(workbookPassword=password)
     ws = wb[sheet_name]
 
     # Get day value from report_date
@@ -598,7 +687,13 @@ def add_consumption(inventory_file, sheet_name, consumpt_date, consumption):
 
     # Save the file
     # wb.security = WorkbookProtection(workbookPassword = '2400LI')
-    wb.save(inventory_file)
+    try:
+        wb.save(inventory_file)
+        
+    except:
+        printColor('red', f'***Cannot save {inventory_file}, please check if the excel file is currently open***')
+    
+    wb.close()
 
 
 # def add_password(inventory_file, password):
